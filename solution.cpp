@@ -2,81 +2,70 @@
 #include <vector>
 #include <queue>
 #include <algorithm>
+#include <unordered_map>
 
 using namespace std;
 
-class FastMaxFlow {
+class OptimizedMaxFlow {
 private:
     int n, m;
-    vector<vector<int>> adj;
+    vector<vector<pair<int, int>>> adj; // node -> (neighbor, edge_id)
     vector<pair<int, int>> edges;
     
 public:
-    FastMaxFlow(int n, int m) : n(n), m(m) {
+    OptimizedMaxFlow(int n, int m) : n(n), m(m) {
         adj.resize(n + 1);
     }
     
-    void addEdge(int u, int v) {
-        adj[u].push_back(v);
-        adj[v].push_back(u);
+    void addEdge(int u, int v, int edge_id) {
+        adj[u].emplace_back(v, edge_id);
+        adj[v].emplace_back(u, edge_id);
         edges.emplace_back(u, v);
     }
     
-    // Optimized BFS for unit capacity graphs
+    // Fast BFS with edge marking for unit capacity graphs
     int maxFlow(int s, int t) {
         if (s == t) return 0;
         
-        // Use edge indices for capacity tracking
-        vector<int> edge_cap(m * 2, 1); // Forward and backward edges
-        vector<vector<int>> edge_list(n + 1);
-        vector<vector<int>> rev_edge(n + 1);
-        
-        // Build edge list with indices
-        for (int i = 0; i < m; i++) {
-            int u = edges[i].first;
-            int v = edges[i].second;
-            edge_list[u].push_back(i * 2);
-            edge_list[v].push_back(i * 2 + 1);
-            rev_edge[u].push_back(i * 2 + 1);
-            rev_edge[v].push_back(i * 2);
-        }
-        
         int flow = 0;
+        vector<bool> edge_used(m, false);
         
         // Since max degree is 3, max flow is at most 3
         for (int attempt = 0; attempt < 3; attempt++) {
             vector<int> parent(n + 1, -1);
-            vector<int> parent_edge(n + 1, -1);
+            vector<int> edge_idx(n + 1, -1);
             queue<int> q;
             q.push(s);
             parent[s] = s;
             
-            while (!q.empty() && parent[t] == -1) {
+            bool found = false;
+            while (!q.empty() && !found) {
                 int u = q.front();
                 q.pop();
                 
-                for (int edge_idx : edge_list[u]) {
-                    if (edge_cap[edge_idx] > 0) {
-                        int v = (edge_idx % 2 == 0) ? edges[edge_idx / 2].second : edges[edge_idx / 2].first;
-                        if (parent[v] == -1) {
-                            parent[v] = u;
-                            parent_edge[v] = edge_idx;
-                            q.push(v);
-                            if (v == t) break;
+                for (auto& edge_info : adj[u]) {
+                    int v = edge_info.first;
+                    int eid = edge_info.second;
+                    if (parent[v] == -1 && !edge_used[eid]) {
+                        parent[v] = u;
+                        edge_idx[v] = eid;
+                        if (v == t) {
+                            found = true;
+                            break;
                         }
+                        q.push(v);
                     }
                 }
             }
             
-            if (parent[t] == -1) break;
+            if (!found) break;
             
-            // Update capacities along the path
+            // Mark edges along the found path as used
             int v = t;
             while (v != s) {
                 int u = parent[v];
-                int edge_idx = parent_edge[v];
-                edge_cap[edge_idx]--; // Use forward edge
-                edge_cap[edge_idx ^ 1]++; // Increase reverse edge capacity
+                int edge_id = edge_idx[v];
+                edge_used[edge_id] = true;
                 v = u;
             }
             
@@ -94,12 +83,12 @@ int main() {
     int n, m;
     cin >> n >> m;
     
-    FastMaxFlow solver(n, m);
+    OptimizedMaxFlow solver(n, m);
     
     for (int i = 0; i < m; i++) {
         int u, v;
         cin >> u >> v;
-        solver.addEdge(u, v);
+        solver.addEdge(u, v, i);
     }
     
     long long total_sum = 0;

@@ -2,81 +2,80 @@
 #include <vector>
 #include <queue>
 #include <algorithm>
-#include <cstring>
-#include <climits>
 
 using namespace std;
 
-class MaxFlowSolver {
+class OptimizedMaxFlow {
 private:
     int n;
     vector<vector<int>> adj;
-    vector<vector<int>> capacity;
-    vector<vector<int>> flow;
+    vector<pair<int, int>> edges;
     
 public:
-    MaxFlowSolver(int n) : n(n) {
+    OptimizedMaxFlow(int n) : n(n) {
         adj.resize(n + 1);
-        capacity.assign(n + 1, vector<int>(n + 1, 0));
-        flow.assign(n + 1, vector<int>(n + 1, 0));
     }
     
     void addEdge(int u, int v) {
         adj[u].push_back(v);
         adj[v].push_back(u);
-        capacity[u][v] = 1;
-        capacity[v][u] = 1;
+        edges.emplace_back(u, v);
     }
     
-    int bfs(int s, int t, vector<int>& parent) {
-        fill(parent.begin(), parent.end(), -1);
-        parent[s] = s;
-        queue<pair<int, int>> q;
-        q.push(make_pair(s, INT_MAX));
+    // Find edge-disjoint paths using BFS with edge marking
+    int maxFlow(int s, int t) {
+        if (s == t) return 0;
         
-        while (!q.empty()) {
-            int u = q.front().first;
-            int flow_val = q.front().second;
-            q.pop();
+        vector<bool> edge_used(n * n + 1, false); // Mark used edges
+        int flow = 0;
+        
+        // Maximum possible flow is at most 3 due to degree constraint
+        for (int attempt = 0; attempt < 3; attempt++) {
+            vector<int> parent(n + 1, -1);
+            vector<int> edge_idx(n + 1, -1);
+            queue<int> q;
+            q.push(s);
+            parent[s] = s;
             
-            for (int v : adj[u]) {
-                if (parent[v] == -1 && capacity[u][v] - flow[u][v] > 0) {
-                    parent[v] = u;
-                    int new_flow = min(flow_val, capacity[u][v] - flow[u][v]);
-                    if (v == t) {
-                        return new_flow;
+            while (!q.empty() && parent[t] == -1) {
+                int u = q.front();
+                q.pop();
+                
+                for (size_t i = 0; i < adj[u].size(); i++) {
+                    int v = adj[u][i];
+                    if (parent[v] == -1) {
+                        // Check if this edge is already used
+                        int edge_id = u * n + v; // Simple edge ID
+                        if (!edge_used[edge_id]) {
+                            parent[v] = u;
+                            edge_idx[v] = edge_id;
+                            q.push(v);
+                            if (v == t) break;
+                        }
                     }
-                    q.push(make_pair(v, new_flow));
                 }
             }
-        }
-        return 0;
-    }
-    
-    int maxFlow(int s, int t) {
-        // Reset flow matrix for this pair
-        for (int i = 1; i <= n; i++) {
-            fill(flow[i].begin(), flow[i].end(), 0);
-        }
-        
-        int flow_sum = 0;
-        vector<int> parent(n + 1);
-        int new_flow;
-        
-        while ((new_flow = bfs(s, t, parent)) > 0) {
-            flow_sum += new_flow;
             
-            // Update flow along the path
+            if (parent[t] == -1) break; // No more paths found
+            
+            // Mark edges along the found path as used
             int v = t;
             while (v != s) {
                 int u = parent[v];
-                flow[u][v] += new_flow;
-                flow[v][u] -= new_flow;
+                int edge_id = u * n + v;
+                edge_used[edge_id] = true;
+                edge_used[v * n + u] = true; // Mark both directions
                 v = u;
             }
+            
+            flow++;
         }
         
-        return flow_sum;
+        return flow;
+    }
+    
+    int getEdgeCount() const {
+        return edges.size();
     }
 };
 
@@ -87,7 +86,7 @@ int main() {
     int n, m;
     cin >> n >> m;
     
-    MaxFlowSolver solver(n);
+    OptimizedMaxFlow solver(n);
     
     for (int i = 0; i < m; i++) {
         int u, v;

@@ -5,14 +5,14 @@
 
 using namespace std;
 
-class OptimizedMaxFlow {
+class FastMaxFlow {
 private:
-    int n;
+    int n, m;
     vector<vector<int>> adj;
     vector<pair<int, int>> edges;
     
 public:
-    OptimizedMaxFlow(int n) : n(n) {
+    FastMaxFlow(int n, int m) : n(n), m(m) {
         adj.resize(n + 1);
     }
     
@@ -22,17 +22,31 @@ public:
         edges.emplace_back(u, v);
     }
     
-    // Find edge-disjoint paths using BFS with edge marking
+    // Optimized BFS for unit capacity graphs
     int maxFlow(int s, int t) {
         if (s == t) return 0;
         
-        vector<bool> edge_used(n * n + 1, false); // Mark used edges
+        // Use edge indices for capacity tracking
+        vector<int> edge_cap(m * 2, 1); // Forward and backward edges
+        vector<vector<int>> edge_list(n + 1);
+        vector<vector<int>> rev_edge(n + 1);
+        
+        // Build edge list with indices
+        for (int i = 0; i < m; i++) {
+            int u = edges[i].first;
+            int v = edges[i].second;
+            edge_list[u].push_back(i * 2);
+            edge_list[v].push_back(i * 2 + 1);
+            rev_edge[u].push_back(i * 2 + 1);
+            rev_edge[v].push_back(i * 2);
+        }
+        
         int flow = 0;
         
-        // Maximum possible flow is at most 3 due to degree constraint
+        // Since max degree is 3, max flow is at most 3
         for (int attempt = 0; attempt < 3; attempt++) {
             vector<int> parent(n + 1, -1);
-            vector<int> edge_idx(n + 1, -1);
+            vector<int> parent_edge(n + 1, -1);
             queue<int> q;
             q.push(s);
             parent[s] = s;
@@ -41,14 +55,12 @@ public:
                 int u = q.front();
                 q.pop();
                 
-                for (size_t i = 0; i < adj[u].size(); i++) {
-                    int v = adj[u][i];
-                    if (parent[v] == -1) {
-                        // Check if this edge is already used
-                        int edge_id = u * n + v; // Simple edge ID
-                        if (!edge_used[edge_id]) {
+                for (int edge_idx : edge_list[u]) {
+                    if (edge_cap[edge_idx] > 0) {
+                        int v = (edge_idx % 2 == 0) ? edges[edge_idx / 2].second : edges[edge_idx / 2].first;
+                        if (parent[v] == -1) {
                             parent[v] = u;
-                            edge_idx[v] = edge_id;
+                            parent_edge[v] = edge_idx;
                             q.push(v);
                             if (v == t) break;
                         }
@@ -56,15 +68,15 @@ public:
                 }
             }
             
-            if (parent[t] == -1) break; // No more paths found
+            if (parent[t] == -1) break;
             
-            // Mark edges along the found path as used
+            // Update capacities along the path
             int v = t;
             while (v != s) {
                 int u = parent[v];
-                int edge_id = u * n + v;
-                edge_used[edge_id] = true;
-                edge_used[v * n + u] = true; // Mark both directions
+                int edge_idx = parent_edge[v];
+                edge_cap[edge_idx]--; // Use forward edge
+                edge_cap[edge_idx ^ 1]++; // Increase reverse edge capacity
                 v = u;
             }
             
@@ -72,10 +84,6 @@ public:
         }
         
         return flow;
-    }
-    
-    int getEdgeCount() const {
-        return edges.size();
     }
 };
 
@@ -86,7 +94,7 @@ int main() {
     int n, m;
     cin >> n >> m;
     
-    OptimizedMaxFlow solver(n);
+    FastMaxFlow solver(n, m);
     
     for (int i = 0; i < m; i++) {
         int u, v;
